@@ -13,7 +13,7 @@ dynrec experiment for performance improvment measure
 #if __EMSCRIPTEN__
 #include <emscripten.h>
 
-#define __DYNREC__ 0
+#define __DYNREC__ 1
 
 #endif
 
@@ -25,7 +25,7 @@ public:
 
 
 #if __EMSCRIPTEN__
-  void dynrec_startMethod(const char* name, const int argc)
+  void dynrec_startMethod(const char* name)
   {
     std::cout<<__func__<<std::endl;
 
@@ -35,7 +35,9 @@ public:
         Module.dynrec = Module.dynrec || {};
         Module.dynrec.methods = Module.dynrec.methods || {};
         Module.dynrec.currentMethod = name;
-        code += 'var locals = [];\n';
+        var code = '';
+        code += 'Module.dynrec.stack = Module.dynrec.stack || new Array()\n';
+        code += 'var locals = new Array(10);\n';
         code += 'var r0 = 0;\n';
         Module.dynrec.code = code; 
 
@@ -51,9 +53,9 @@ public:
       var name = Module.dynrec.currentMethod;
       
       var code = Module.dynrec.code;
-      code += 'return r0;\n'
+      code += 'return r0;\n';
       
-      console.log(code);
+      //console.log(code);
       console.error('DYNREC method: ', name,' code-->',code);
 
       //Module.dynrec.methods[name] = new Function("a1", "a2", Module.dynrec.code);
@@ -72,32 +74,67 @@ public:
     ,b);
   };
 
-  void emit_push_i()
+  void emit_setlocal_i(const int reg)
+  {
+    EM_ASM_INT({
+      var reg = $0;
+      Module.dynrec.code += 'locals[' + reg.toString() + '] = Module.dynrec.stack.pop();\n'
+    }
+    ,reg);
+  }
+
+  void emit_getlocal_i(const int reg)
+  {
+    EM_ASM_INT({
+      var reg = $0;
+      Module.dynrec.code += 'Module.dynrec.stack.push(locals[' + reg.toString() + ']);\n'
+    }
+    ,reg);
+
+  }
+
+  void emit_return_local_i(const int reg)
+  {
+    EM_ASM_INT({
+      var reg = $0;
+      Module.dynrec.code += 'r0 = locals[' + reg.toString() + '];\n';
+    }
+    ,reg);
+  }
+
+
+  void emit_push_i(const int v)
+  {
+    EM_ASM_INT({
+      var v = $0;
+      var _v = v.toString();
+      Module.dynrec.code += 'Module.dynrec.stack.push(' + _v + ');\n';
+    }
+    ,v);
+  }
+
+  void emit_pop_i()
   {
     EM_ASM({
-      Module.dynrec.code += 'locals.push(;\n';
+      Module.dynrec.code += 'Module.dynrec.stack.pop();\n';
     });
   }
+
   void emit_add_i()
   {
     EM_ASM({
       Module.dynrec.code += '{\n';
-      Module.dynrec.code += 'var l0 = locals[l-1] + locals[l]\n;'
-      Module.dynrec.code += 'locals.pop();\nlocals.pop();\n';
-      Module.dynrec.code += 'locals.push(l0);\n';
+      Module.dynrec.code += 'var l0 = Module.dynrec.stack.pop();\n';
+      Module.dynrec.code += 'var l1 = Module.dynrec.stack.pop();\n';
+      Module.dynrec.code += 'Module.dynrec.stack.push(l0 + l1);\n';
       Module.dynrec.code += '}\n';
     });
   }
-  void emit_pop_i()
-  {
-    EM_ASM({
-      Module.dynrec.code += 'locals[l] = arguments.pop();\n'
-    });
-  }
+  
   void emit_return_i()
   {
     EM_ASM({
-      Module.dynrec.code += 'var r0 = locals[l]; l--;return r0;';
+      Module.dynrec.code += 'var r0 = locals[l]; l--;return r0;\n';
     });
   }
 #endif
@@ -109,22 +146,31 @@ public:
   {
     locals[reg] = s.top();
     s.pop();
+#if __EMSCRIPTEN__ && __DYNREC__
+    emit_setlocal_i(reg);
+#endif
   }
 
   void getlocal_i(const int reg)
   {
     s.push(locals[reg]);
+#if __EMSCRIPTEN__ && __DYNREC__
+    emit_getlocal_i(reg);
+#endif
   }
 
   int return_local_i(const int reg)
   {
+#if __EMSCRIPTEN__ && __DYNREC__
+    emit_return_local_i(reg);
+#endif
     return locals[reg];
   }
 
   void push_i(int v) {
     s.push(v);
 #if __EMSCRIPTEN__ && __DYNREC__
-    emit_push_i();
+    emit_push_i(v);
 #endif
   };
 
@@ -140,8 +186,10 @@ public:
 
   void add_i()
   {
-    int a = pop_i();
-    int b = pop_i();
+    int a = s.top();
+    s.pop();
+    int b = s.top();
+    s.pop();
 
 #if __EMSCRIPTEN__ && __DYNREC__
     emit_add_i();
