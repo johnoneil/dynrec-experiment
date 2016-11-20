@@ -13,7 +13,7 @@ dynrec experiment for performance improvment measure
 #if __EMSCRIPTEN__
 #include <emscripten.h>
 
-#define __DYNREC__ 0
+#define __DYNREC__ 1 
 
 #endif
 
@@ -39,6 +39,7 @@ public:
         var code = '';
         //code += 'Module.dynrec.stack = Module.dynrec.stack || new Array();\n';
         code += 'var locals = new Array(10);\n';
+        code += 'var localstack = new Array();\n';
         code += 'var r0 = 0;\n';
         Module.dynrec.code = code; 
 
@@ -56,7 +57,7 @@ public:
       var code = Module.dynrec.code;
       code += 'return r0;\n';
 
-#ifdef __DEBUG__
+#if def __DEBUG__
       console.log('DYNREC method: ', name,' code-->',code);
 #endif
 
@@ -93,7 +94,8 @@ public:
   {
     EM_ASM_INT({
       var reg = $0;
-      Module.dynrec.code += 'locals[' + reg.toString() + '] = Module.dynrec.stack.pop();\n'
+      //Module.dynrec.code += 'locals[' + reg.toString() + '] = Module.dynrec.stack.pop();\n'
+      Module.dynrec.code += 'locals[' + reg.toString() + '] = localstack.pop();\n'
     }
     ,reg);
   }
@@ -102,7 +104,8 @@ public:
   {
     EM_ASM_INT({
       var reg = $0;
-      Module.dynrec.code += 'Module.dynrec.stack.push(locals[' + reg.toString() + ']);\n';
+      //Module.dynrec.code += 'Module.dynrec.stack.push(locals[' + reg.toString() + ']);\n';
+      Module.dynrec.code += 'localstack.push(locals[' + reg.toString() + ']);\n';
 #ifdef __DEBUG
       Module.dynrec.code += 'console.log("locals reg: ' + reg.toString() + ' is: " + locals[' + reg.toString() + ']);\n';
 #endif
@@ -127,7 +130,8 @@ public:
     EM_ASM_INT({
       var v = $0;
       var _v = v.toString();
-      Module.dynrec.code += 'Module.dynrec.stack.push(' + _v + ');\n';
+      //Module.dynrec.code += 'Module.dynrec.stack.push(' + _v + ');\n';
+      Module.dynrec.code += 'localstack.push(' + _v + ');\n';
     }
     ,v);
   }
@@ -135,7 +139,8 @@ public:
   void emit_pop_i()
   {
     EM_ASM({
-      Module.dynrec.code += 'Module.dynrec.stack.pop();\n';
+      //Module.dynrec.code += 'Module.dynrec.stack.pop();\n';
+      Module.dynrec.code += 'localstack.pop();\n';
     });
   }
 
@@ -143,9 +148,16 @@ public:
   {
     EM_ASM({
       Module.dynrec.code += '{\n';
-      Module.dynrec.code += 'var l0 = Module.dynrec.stack.pop();\n';
-      Module.dynrec.code += 'var l1 = Module.dynrec.stack.pop();\n';
-      Module.dynrec.code += 'Module.dynrec.stack.push(l0 + l1);\n';
+      
+      //Module.dynrec.code += 'var l0 = Module.dynrec.stack.pop();\n';
+      //Module.dynrec.code += 'var l1 = Module.dynrec.stack.pop();\n';
+      //Module.dynrec.code += 'Module.dynrec.stack.push(l0 + l1);\n';
+      
+      Module.dynrec.code += 'var l0 = localstack.pop();\n';
+      Module.dynrec.code += 'var l1 = localstack.pop();\n';
+      Module.dynrec.code += 'localstack.push(l0 + l1);\n';
+
+      
       Module.dynrec.code += '}\n';
     });
   }
