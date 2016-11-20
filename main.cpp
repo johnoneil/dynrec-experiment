@@ -8,13 +8,14 @@ dynrec experiment for performance improvment measure
 
 #include <iostream>
 #include <stack>
+#include <chrono>
 
 #if __EMSCRIPTEN__
 #include <emscripten.h>
 #endif
 
 
-static const int LOOPS = 1000;
+#define LOOPS 100000
 
 class VirtualMachine {
 public:
@@ -52,8 +53,9 @@ int main(int argc, char* argv[])
   int r = 0;
 
   VirtualMachine vm;
-
-
+  
+  using namespace std::chrono;
+  high_resolution_clock::time_point t1 = high_resolution_clock::now();
   // Let's say we have a function that has a long series of number
   // manipulating ocodes. Every time we call this method we traverse these
   // opcodes and do work for each one.
@@ -64,8 +66,11 @@ int main(int argc, char* argv[])
     vm.add_i();
     a = vm.pop_i();
   }
+  high_resolution_clock::time_point t2 = high_resolution_clock::now();
 
   std::cout<<"Virtual machine implementaition result: "<<a<<std::endl;
+  duration<double> time_span = duration_cast<duration<double>>(t2-t1);
+  std::cout<<"operation took : "<<time_span.count()<<" seconds."<<std::endl;
 
 #if __EMSCRIPTEN__
   // assume instead that the first time we traverse these opcodes in the given
@@ -75,24 +80,36 @@ int main(int argc, char* argv[])
   a = 1;
   b = 1;
   r = 0;
+  int loops =  LOOPS;
+  high_resolution_clock::time_point t3 = high_resolution_clock::now();
   
   r = EM_ASM_INT({
     
     var a = $0;
     var b = $1;
+    var loops = $2;
     var r = 0;
-    
-    for(var i=0;i < 1000 ;i++)
+
+    for(var i=0;i < loops ;i++)
     {
-      r = a + b;
-      a = r;
+      var x = a; // pop a
+      var y = b; // pop b
+      var t = x + y; // add
+      a = t; // push result
+      r = t; // pop result
     }
     return r;
   }
   ,a
-  ,b);
+  ,b
+  ,loops);
 
-  std::cout<<"Native emscripten dynrec implementation result: "<<r<<std::endl;
+  high_resolution_clock::time_point t4 = high_resolution_clock::now();
+
+  std::cout<<"Virtual machine implementaition result: "<<r<<std::endl;
+  duration<double> time_span_2 = duration_cast<duration<double>>(t4-t3);
+  std::cout<<"operation took : "<<time_span_2.count()<<" seconds."<<std::endl;
+
 
 #endif // __EMSCRIPTEN__
 

@@ -1,9 +1,10 @@
 
-TARGET := tes
+TARGET := test
 WEB_TARGET := $(TARGET).html
 
 CPP_FLAGS := -std=c++11
 
+native: $(TARGET)
 
 $(TARGET): main.cpp
 	g++ main.cpp $(CPP_FLAGS) -o $@
