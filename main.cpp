@@ -13,12 +13,12 @@ dynrec experiment for performance improvment measure
 #if __EMSCRIPTEN__
 #include <emscripten.h>
 
-#define __DYNREC__ 1
+#define __DYNREC__ 0
 
 #endif
 
 
-#define LOOPS 3
+#define LOOPS 10000
 
 class VirtualMachine {
 public:
@@ -35,8 +35,9 @@ public:
         Module.dynrec = Module.dynrec || {};
         Module.dynrec.methods = Module.dynrec.methods || {};
         Module.dynrec.currentMethod = name;
+        Module.dynrec.stack = new Array(10);
         var code = '';
-        code += 'Module.dynrec.stack = Module.dynrec.stack || new Array()\n';
+        //code += 'Module.dynrec.stack = Module.dynrec.stack || new Array();\n';
         code += 'var locals = new Array(10);\n';
         code += 'var r0 = 0;\n';
         Module.dynrec.code = code; 
@@ -54,11 +55,17 @@ public:
       
       var code = Module.dynrec.code;
       code += 'return r0;\n';
-      
-      //console.log(code);
-      console.error('DYNREC method: ', name,' code-->',code);
 
-      //Module.dynrec.methods[name] = new Function("a1", "a2", Module.dynrec.code);
+#ifdef __DEBUG__
+      console.log('DYNREC method: ', name,' code-->',code);
+#endif
+
+#if 0
+      Module.dynrec.methods[name] = new Function("a1","a3",'console.log("hello from dummy dynrec.");\nreturn 12345;');
+#else
+
+      Module.dynrec.methods[name] = new Function("a1", "a2", Module.dynrec.code);
+#endif
     });
   };
   int dynrec_callmethod_i(const char* name, const int a, const int b)
@@ -67,7 +74,15 @@ public:
       var name = Pointer_stringify($0|0);
       var a = $1;
       var b = $2;
-      return Module.dynrec.methods[name](a,b);
+#ifdef __DEBUG__
+      console.log('invoking method ', name, ' via dynrec.');
+#endif
+      var f = Module.dynrec.methods[name];
+      var r = f(a,b);
+#ifdef __DEBUG__
+      console.log("dynrec_callmethod_i result: ", r);
+#endif
+      return r;
     }
     ,name
     ,a
@@ -87,7 +102,10 @@ public:
   {
     EM_ASM_INT({
       var reg = $0;
-      Module.dynrec.code += 'Module.dynrec.stack.push(locals[' + reg.toString() + ']);\n'
+      Module.dynrec.code += 'Module.dynrec.stack.push(locals[' + reg.toString() + ']);\n';
+#ifdef __DEBUG
+      Module.dynrec.code += 'console.log("locals reg: ' + reg.toString() + ' is: " + locals[' + reg.toString() + ']);\n';
+#endif
     }
     ,reg);
 
@@ -98,6 +116,7 @@ public:
     EM_ASM_INT({
       var reg = $0;
       Module.dynrec.code += 'r0 = locals[' + reg.toString() + '];\n';
+      Module.dynrec.code += 'console.log("returning value r0:", r0);\n';
     }
     ,reg);
   }
@@ -264,14 +283,15 @@ int main(int argc, char* argv[])
   r = 0;
   int loops =  LOOPS;
 
-#if 0 //__DYNREC__
+  high_resolution_clock::time_point t3 = high_resolution_clock::now();
+
+#if __DYNREC__
 
   r = vm.dynrec_callmethod_i("sum", a, b);
 
 #else // __DYNREC__
 
-  high_resolution_clock::time_point t3 = high_resolution_clock::now();
-  
+ 
   r = EM_ASM_INT({
     
     var a = $0;
