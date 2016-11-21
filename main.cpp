@@ -18,7 +18,7 @@ dynrec experiment for performance improvment measure
 #endif
 
 
-#define LOOPS 10000
+#define LOOPS 100
 
 class VirtualMachine {
 public:
@@ -57,7 +57,7 @@ public:
       var code = Module.dynrec.code;
       code += 'return r0;\n';
 
-#if def __DEBUG__
+#ifdef __DEBUG__
       console.log('DYNREC method: ', name,' code-->',code);
 #endif
 
